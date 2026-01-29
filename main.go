@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/getlantern/systray"
@@ -14,14 +17,11 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-// === НАСТРОЙКИ ===
-// Укажите здесь имя сервиса как в системе (например "zapret" или "winws")
 const ServiceName = "zapret"
 
 //go:embed icon.ico
 var iconData []byte
 
-// Определяем свои константы действий, так как svc.Start не существует
 type ServiceAction int
 
 const (
@@ -31,7 +31,7 @@ const (
 
 func main() {
 	// 1. Проверяем права администратора
-	if !amAdmin() {
+	if !isAdmin() {
 		runMeElevated()
 		return
 	}
@@ -52,6 +52,8 @@ func onReady() {
 	mStart := systray.AddMenuItem("Запустить", "Start Service")
 	mStop := systray.AddMenuItem("Остановить", "Stop Service")
 	mRestart := systray.AddMenuItem("Перезагрузить", "Restart Service")
+	systray.AddSeparator()
+	mOpenBat := systray.AddMenuItem("Открыть service.bat", "Открыть папку со скриптом")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Выход", "Закрыть программу")
 
@@ -103,6 +105,9 @@ func onReady() {
 				controlService(ServiceName, ActionStop)
 				time.Sleep(1 * time.Second)
 				controlService(ServiceName, ActionStart)
+
+			case <-mOpenBat.ClickedCh:
+				openServiceBat()
 			case <-mQuit.ClickedCh:
 				systray.Quit()
 			}
@@ -121,13 +126,23 @@ func getServiceStatus(name string) (svc.State, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer m.Disconnect()
+	defer func(m *mgr.Mgr) {
+		err := m.Disconnect()
+		if err != nil {
+
+		}
+	}(m)
 
 	s, err := m.OpenService(name)
 	if err != nil {
 		return 0, err
 	}
-	defer s.Close()
+	defer func(s *mgr.Service) {
+		err := s.Close()
+		if err != nil {
+
+		}
+	}(s)
 
 	status, err := s.Query()
 	if err != nil {
@@ -143,20 +158,28 @@ func controlService(name string, action ServiceAction) {
 		log.Println("SCM connection failed:", err)
 		return
 	}
-	defer m.Disconnect()
+	defer func(m *mgr.Mgr) {
+		err := m.Disconnect()
+		if err != nil {
+
+		}
+	}(m)
 
 	s, err := m.OpenService(name)
 	if err != nil {
 		log.Println("Service open failed:", err)
 		return
 	}
-	defer s.Close()
+	defer func(s *mgr.Service) {
+		err := s.Close()
+		if err != nil {
+
+		}
+	}(s)
 
 	if action == ActionStart {
-		// Для старта вызывается метод .Start(), а не .Control()
 		err = s.Start()
 	} else if action == ActionStop {
-		// Для стопа отправляется сигнал svc.Stop
 		_, err = s.Control(svc.Stop)
 	}
 
@@ -165,11 +188,12 @@ func controlService(name string, action ServiceAction) {
 	}
 }
 
-// === ФУНКЦИИ ДЛЯ ПРАВ АДМИНИСТРАТОРА ===
+func isAdmin() bool {
+	shell32 := syscall.NewLazyDLL("shell32.dll")
+	isUserAnAdmin := shell32.NewProc("IsUserAnAdmin")
 
-func amAdmin() bool {
-	_, err := os.Open("\\\\.\\PHYSICALDRIVE0")
-	return err == nil
+	ret, _, _ := isUserAnAdmin.Call()
+	return ret != 0
 }
 
 func runMeElevated() {
@@ -188,5 +212,74 @@ func runMeElevated() {
 	err := windows.ShellExecute(0, verbPtr, exePtr, argsPtr, cwdPtr, showCmd)
 	if err != nil {
 		fmt.Println(err)
+	}
+}
+
+func getServiceBinaryPath(name string) (string, error) {
+	m, err := mgr.Connect()
+	if err != nil {
+		return "", err
+	}
+	defer func(m *mgr.Mgr) {
+		err := m.Disconnect()
+		if err != nil {
+
+		}
+	}(m)
+
+	s, err := m.OpenService(name)
+	if err != nil {
+		return "", err
+	}
+	defer func(s *mgr.Service) {
+		err := s.Close()
+		if err != nil {
+
+		}
+	}(s)
+
+	config, err := s.Config()
+	if err != nil {
+		return "", err
+	}
+	return config.BinaryPathName, nil
+}
+
+func openServiceBat() {
+	rawPath, err := getServiceBinaryPath(ServiceName)
+	if err != nil {
+		log.Println("Не удалось получить путь к сервису:", err)
+		return
+	}
+
+	// Очистка пути от кавычек и аргументов
+	exePath := rawPath
+	if len(exePath) > 0 && exePath[0] == '"' {
+		// Путь в кавычках (например "C:\Path\To\exe")
+		if end := strings.Index(exePath[1:], "\""); end != -1 {
+			exePath = exePath[1 : end+1]
+		}
+	} else {
+		// Путь без кавычек; берем до первого пробела, если есть аргументы
+		parts := strings.Split(exePath, " ")
+		if len(parts) > 0 {
+			exePath = parts[0]
+		}
+	}
+
+	// Определяем директорию
+	dir := filepath.Dir(exePath)
+	// Если мы внутри bin, поднимаемся на уровень выше
+	if strings.ToLower(filepath.Base(dir)) == "bin" {
+		dir = filepath.Dir(dir)
+	}
+
+	batPath := filepath.Join(dir, "service.bat")
+	log.Println("Открываем:", batPath)
+
+	// Запускаем через cmd start
+	err = exec.Command("cmd", "/c", "start", "", batPath).Start()
+	if err != nil {
+		log.Println("Ошибка запуска service.bat:", err)
 	}
 }
