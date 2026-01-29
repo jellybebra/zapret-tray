@@ -67,15 +67,16 @@ func onReady() {
 				statusText := "Неизвестно"
 				switch state {
 				case svc.Stopped:
-					statusText = "🔴 Остановлен"
+					statusText = "Остановлен"
 				case svc.StartPending:
-					statusText = "🟡 Запускается..."
+					statusText = "Запускается..."
 				case svc.StopPending:
-					statusText = "🟡 Останавливается..."
+					statusText = "Останавливается..."
 				case svc.Running:
-					statusText = "🟢 Работает"
+					statusText = "Работает"
 				}
-				mStatus.SetTitle(fmt.Sprintf("Состояние: %s", statusText))
+				mStatus.SetTitle(fmt.Sprintf("Состояние: 🟢 %s", statusText))
+				systray.SetTooltip(fmt.Sprintf("Zapret Controller: %s", statusText))
 
 				// Управление активностью кнопок
 				if state == svc.Running {
