@@ -57,6 +57,7 @@ func onReady() {
 	// Versions Submenu
 	mVersions := systray.AddMenuItem("Версии", "Управление версиями")
 	mRefreshVersions := systray.AddMenuItem("Обновить список версий", "Обновить список версий")
+	mOpenDir := systray.AddMenuItem("Открыть папку с версиями", "Открыть папку с версиями")
 	systray.AddSeparator() // Separator in main menu
 
 	mOpenBat := systray.AddMenuItem("Открыть service.bat", "Открыть папку со скриптом")
@@ -190,6 +191,8 @@ func onReady() {
 			select {
 			case <-mRefreshVersions.ClickedCh:
 				refreshVersionsList()
+			case <-mOpenDir.ClickedCh:
+				openVersionsFolder()
 			case <-mStart.ClickedCh:
 				controlService(ServiceName, ActionStart)
 			case <-mStop.ClickedCh:
@@ -387,5 +390,20 @@ func openVersionServiceBat(versionDir string) {
 	err := exec.Command("cmd", "/c", "start", "/D", versionDir, "", batPath).Start()
 	if err != nil {
 		log.Println("Ошибка запуска service.bat для версии:", err)
+	}
+}
+
+func openVersionsFolder() {
+	dir, err := getAutoZapretDir()
+	if err != nil {
+		log.Println("Не удалось получить путь к папке версий:", err)
+		return
+	}
+	// Ensure it exists so explorer doesn't complain
+	os.MkdirAll(dir, 0755)
+
+	err = exec.Command("explorer", dir).Start()
+	if err != nil {
+		log.Println("Ошибка открытия папки версий:", err)
 	}
 }
