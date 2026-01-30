@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -154,8 +155,19 @@ func onReady() {
 		for {
 			state, err := getServiceStatus(ServiceName)
 			if err != nil {
-				mStatus.SetTitle(fmt.Sprintf("Ошибка: %v", err))
+				if errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
+					mStatus.SetTitle("Состояние: Сервис не установлен")
+					systray.SetTooltip("Zapret Controller: Сервис не установлен")
+				} else {
+					mStatus.SetTitle(fmt.Sprintf("Ошибка: %v", err))
+					systray.SetTooltip(fmt.Sprintf("Zapret Controller: Ошибка: %v", err))
+				}
+				mStart.Disable()
+				mStop.Disable()
+				mRestart.Disable()
+				mOpenBat.Disable()
 			} else {
+				mOpenBat.Enable()
 				statusText := "Неизвестно"
 				switch state {
 				case svc.Stopped:
@@ -175,7 +187,8 @@ func onReady() {
 					mStart.Disable()
 					mStop.Enable()
 					mRestart.Enable()
-				} else if state == svc.Stopped {
+				} else {
+					// Stopped or pending
 					mStart.Enable()
 					mStop.Disable()
 					mRestart.Disable()
