@@ -26,6 +26,9 @@ CloseApplications=yes
 CloseApplicationsFilter=*.exe
 RestartApplications=no
 
+UninstallDisplayName={#MyAppName} {#MyAppVersion}
+UninstallDisplayIcon={app}\{#MyAppExeName}
+
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
