@@ -56,7 +56,7 @@ func onReady() {
 
 	// Versions Submenu
 	mVersions := systray.AddMenuItem("Версии", "Управление версиями")
-	mRefreshVersions := mVersions.AddSubMenuItem("Обновить список версий", "Обновить список версий")
+	mRefreshVersions := systray.AddMenuItem("Обновить список версий", "Обновить список версий")
 	systray.AddSeparator() // Separator in main menu
 
 	mOpenBat := systray.AddMenuItem("Открыть service.bat", "Открыть папку со скриптом")
@@ -97,9 +97,9 @@ func onReady() {
 					// "скачанные кастомные версии (disabled... отображать надо все название целиком)"
 					// My `v.Name` already handles the text logic (trimmed or full).
 					if v.IsCustom {
-						title = v.Name + " (установлено)"
+						title = v.Name
 					} else {
-						title = v.Name + " (установлено)"
+						title = v.Name
 					}
 				} else {
 					title = v.Name + " (скачать)"
@@ -109,7 +109,15 @@ func onReady() {
 				versionItems = append(versionItems, item)
 
 				if v.IsInstalled {
-					item.Disable()
+					// Enable click to open service.bat
+					item.Enable()
+					vCopy := v
+					go func(itm *systray.MenuItem, ver Version) {
+						for range itm.ClickedCh {
+							log.Printf("Opening service.bat for version %s", ver.Name)
+							openVersionServiceBat(ver.FullPath)
+						}
+					}(item, vCopy)
 				} else {
 					// Setup click handler for download
 					vCopy := v // Capture loop var
@@ -367,5 +375,17 @@ func openServiceBat() {
 	err = exec.Command("cmd", "/c", "start", "", batPath).Start()
 	if err != nil {
 		log.Println("Ошибка запуска service.bat:", err)
+	}
+}
+
+func openVersionServiceBat(versionDir string) {
+	batPath := filepath.Join(versionDir, "service.bat")
+	log.Println("Открываем version service.bat:", batPath)
+
+	// Запускаем через cmd start
+	// /D sets the starting directory, which is important for some batch scripts
+	err := exec.Command("cmd", "/c", "start", "/D", versionDir, "", batPath).Start()
+	if err != nil {
+		log.Println("Ошибка запуска service.bat для версии:", err)
 	}
 }
