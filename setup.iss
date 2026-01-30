@@ -10,7 +10,7 @@
 
 [Setup]
 ; Уникальный ID приложения (сгенерируй свой в Inno Setup: Tools -> Generate GUID)
-AppId={8F9755F7-7B40-4EB1-9BA4-FA86722460E8}
+AppId={{8F9755F7-7B40-4EB1-9BA4-FA86722460E8}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -37,7 +37,7 @@ Name: "autostart"; Description: "Запускать вместе с Windows (б�
 
 [Files]
 ; Путь к твоему скомпилированному EXE (предполагаем, что он лежит рядом со скриптом)
-Source: "main.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; Если есть иконка рядом, раскомментируй
 ; Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
