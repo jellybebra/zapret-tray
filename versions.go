@@ -33,11 +33,14 @@ type GithubRelease struct {
 const ZapretRepo = "Flowseal/zapret-discord-youtube"
 
 func getAutoZapretDir() (string, error) {
-	localAppData := os.Getenv("LOCALAPPDATA")
-	if localAppData == "" {
-		return "", fmt.Errorf("LOCALAPPDATA environment variable not set")
+	// Используем ProgramData, так как служба (System) должна иметь доступ к файлам,
+	// а LocalAppData привязана к пользователю.
+	programData := os.Getenv("ProgramData")
+	if programData == "" {
+		// Fallback, если вдруг переменной нет (редкость)
+		programData = "C:\\ProgramData"
 	}
-	return filepath.Join(localAppData, "AutoZapret"), nil
+	return filepath.Join(programData, "ZapretController", "Versions"), nil
 }
 
 func GetLocalVersions() ([]Version, error) {
