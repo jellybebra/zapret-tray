@@ -3,8 +3,6 @@
 
 **Zapret Tray** — это удобная обертка над [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube), которая позволяет управлять версиями и службой `zapret`.
 
-Больше не нужно лазить в `services.msc` или запускать скрипты вручную.
-
 <img width="567" height="652" alt="image" src="https://github.com/user-attachments/assets/2ca96302-bda1-4366-b8fd-f9aa7e75f717" />
 
 ## ✨ Возможности
