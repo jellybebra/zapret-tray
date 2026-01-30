@@ -53,9 +53,92 @@ func onReady() {
 	mStop := systray.AddMenuItem("Остановить", "Stop Service")
 	mRestart := systray.AddMenuItem("Перезагрузить", "Restart Service")
 	systray.AddSeparator()
+
+	// Versions Submenu
+	mVersions := systray.AddMenuItem("Версии", "Управление версиями")
+	mRefreshVersions := mVersions.AddSubMenuItem("Обновить список версий", "Обновить список версий")
+	systray.AddSeparator() // Separator in main menu
+
 	mOpenBat := systray.AddMenuItem("Открыть service.bat", "Открыть папку со скриптом")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Выход", "Закрыть программу")
+
+	// Dynamic items storage
+	var versionItems []*systray.MenuItem
+
+	// Declare ahead to allow recursion if needed (though we call it from a goroutine)
+	var refreshVersionsList func()
+
+	refreshVersionsList = func() {
+		mVersions.SetTitle("Версии (Loading...)")
+		go func() {
+			versions, err := GetAllVersions()
+
+			// Update UI on main thread (systray is thread safe mostly, but logic should be linear)
+			// But we need to clear old items.
+			// systray doesn't have Remove. We will Hide() old items.
+			for _, item := range versionItems {
+				item.Hide()
+			}
+
+			versionItems = nil // Abandon old ones (they stay in memory but hidden)
+
+			if err != nil {
+				mVersions.SetTitle("Версии (Error)")
+				return
+			}
+			mVersions.SetTitle("Версии")
+
+			for _, v := range versions {
+				title := v.Name
+				tooltip := ""
+				if v.IsInstalled {
+					// "скачанные официальные версии (disabled, пример: "zapret-1.9.3", отображаться должно только "1.9.3")"
+					// "скачанные кастомные версии (disabled... отображать надо все название целиком)"
+					// My `v.Name` already handles the text logic (trimmed or full).
+					if v.IsCustom {
+						title = v.Name + " (установлено)"
+					} else {
+						title = v.Name + " (установлено)"
+					}
+				} else {
+					title = v.Name + " (скачать)"
+				}
+
+				item := mVersions.AddSubMenuItem(title, tooltip)
+				versionItems = append(versionItems, item)
+
+				if v.IsInstalled {
+					item.Disable()
+				} else {
+					// Setup click handler for download
+					vCopy := v // Capture loop var
+					go func(itm *systray.MenuItem, ver Version) {
+						for range itm.ClickedCh {
+							log.Printf("Global download requested for %s", ver.Name)
+							itm.SetTitle("Downloading... " + ver.Name)
+							itm.Disable()
+
+							err := DownloadVersion(ver)
+							if err != nil {
+								log.Println("Download failed:", err)
+								itm.SetTitle("Error: " + ver.Name)
+								itm.Enable()
+							} else {
+								log.Println("Download finished")
+								itm.SetTitle(ver.Name + " (Installed)")
+								// Trigger full refresh to update state properly
+								refreshVersionsList()
+							}
+						}
+					}(item, vCopy)
+				}
+			}
+		}()
+	}
+
+	// Initial call
+	refreshVersionsList()
 
 	// Канал для обновления статуса
 	go func() {
@@ -97,6 +180,8 @@ func onReady() {
 	go func() {
 		for {
 			select {
+			case <-mRefreshVersions.ClickedCh:
+				refreshVersionsList()
 			case <-mStart.ClickedCh:
 				controlService(ServiceName, ActionStart)
 			case <-mStop.ClickedCh:
