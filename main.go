@@ -31,14 +31,12 @@ const (
 )
 
 func main() {
-	// 1. Проверяем права администратора
 	if !isAdmin() {
 		runMeElevated()
 		return
 	}
 
-	// 2. Запускаем приложение в трее
-	systray.Run(onReady, onExit)
+	systray.Run(onReady, func() {})
 }
 
 func onReady() {
@@ -59,7 +57,7 @@ func onReady() {
 	mVersions := systray.AddMenuItem("Версии", "Управление версиями")
 	mRefreshVersions := systray.AddMenuItem("Обновить список версий", "Обновить список версий")
 	mOpenDir := systray.AddMenuItem("Открыть папку с версиями", "Открыть папку с версиями")
-	systray.AddSeparator() // Separator in main menu
+	systray.AddSeparator()
 
 	mOpenBat := systray.AddMenuItem("Открыть service.bat", "Открыть папку со скриптом")
 	systray.AddSeparator()
@@ -225,12 +223,6 @@ func onReady() {
 	}()
 }
 
-func onExit() {
-	// Очистка при выходе
-}
-
-// === ФУНКЦИИ РАБОТЫ С СЕРВИСОМ ===
-
 func getServiceStatus(name string) (svc.State, error) {
 	m, err := mgr.Connect()
 	if err != nil {
@@ -261,7 +253,6 @@ func getServiceStatus(name string) (svc.State, error) {
 	return status.State, nil
 }
 
-// controlService теперь принимает нашу кастомную Action, а не svc.Cmd
 func controlService(name string, action ServiceAction) {
 	m, err := mgr.Connect()
 	if err != nil {
@@ -365,29 +356,22 @@ func openServiceBat() {
 	// Очистка пути от кавычек и аргументов
 	exePath := rawPath
 	if len(exePath) > 0 && exePath[0] == '"' {
-		// Путь в кавычках (например "C:\Path\To\exe")
 		if end := strings.Index(exePath[1:], "\""); end != -1 {
 			exePath = exePath[1 : end+1]
 		}
 	} else {
-		// Путь без кавычек; берем до первого пробела, если есть аргументы
 		parts := strings.Split(exePath, " ")
 		if len(parts) > 0 {
 			exePath = parts[0]
 		}
 	}
 
-	// Определяем директорию
 	dir := filepath.Dir(exePath)
-	// Если мы внутри bin, поднимаемся на уровень выше
-	if strings.ToLower(filepath.Base(dir)) == "bin" {
-		dir = filepath.Dir(dir)
-	}
+	dir = filepath.Dir(dir)
 
 	batPath := filepath.Join(dir, "service.bat")
 	log.Println("Открываем:", batPath)
 
-	// Запускаем через cmd start
 	err = exec.Command("cmd", "/c", "start", "", batPath).Start()
 	if err != nil {
 		log.Println("Ошибка запуска service.bat:", err)
@@ -398,8 +382,6 @@ func openVersionServiceBat(versionDir string) {
 	batPath := filepath.Join(versionDir, "service.bat")
 	log.Println("Открываем version service.bat:", batPath)
 
-	// Запускаем через cmd start
-	// /D sets the starting directory, which is important for some batch scripts
 	err := exec.Command("cmd", "/c", "start", "/D", versionDir, "", batPath).Start()
 	if err != nil {
 		log.Println("Ошибка запуска service.bat для версии:", err)
@@ -413,7 +395,11 @@ func openVersionsFolder() {
 		return
 	}
 	// Ensure it exists so explorer doesn't complain
-	os.MkdirAll(dir, 0755)
+	err = os.MkdirAll(dir, 0755)
+	if err != nil {
+		log.Println("Не удалось создать папку версий:", err)
+		return
+	}
 
 	err = exec.Command("explorer", dir).Start()
 	if err != nil {

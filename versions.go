@@ -33,11 +33,8 @@ type GithubRelease struct {
 const ZapretRepo = "Flowseal/zapret-discord-youtube"
 
 func getAutoZapretDir() (string, error) {
-	// Используем ProgramData, так как служба (System) должна иметь доступ к файлам,
-	// а LocalAppData привязана к пользователю.
 	programData := os.Getenv("ProgramData")
 	if programData == "" {
-		// Fallback, если вдруг переменной нет (редкость)
 		programData = "C:\\ProgramData"
 	}
 	return filepath.Join(programData, "ZapretController", "Versions"), nil
@@ -58,27 +55,12 @@ func GetLocalVersions() ([]Version, error) {
 	}
 
 	var versions []Version
-	// "zapret-discord-youtube-" prefix
-	// Official versions usually look like: zapret-discord-youtube-1.9.3
-	// Custom may look like: zapret-v1.8.5-BF-v3.2
-	// Requirement:
-	// - if standard format, show just version "1.9.3"
-	// - if custom/weird, show full name "zapret-v1.8.5-BF-v3.2"
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 		name := entry.Name()
-		if !strings.HasPrefix(name, "zapret-discord-youtube-") {
-			// Maybe it's a custom version that doesn't follow the prefix rule?
-			// The requirement says: "- скачанные кастомные версии (disabled, у них кстати могут быть неправильно название папки задано, типа "zapret-v1.8.5-BF-v3.2", в таком случае отображать надо все название целиком)"
-			// The PS script filtered by `zapret-discord-youtube-*`. I should probably stick to that or be slightly more lenient if "zapret-" is present.
-			// Let's filter by "zapret-" at least to avoid junk.
-			if !strings.HasPrefix(name, "zapret-") {
-				continue
-			}
-		}
 
 		v := Version{
 			FullPath:    filepath.Join(dir, name),
@@ -87,23 +69,10 @@ func GetLocalVersions() ([]Version, error) {
 			Name:        name, // Default to full name
 		}
 
-		// Check if it looks like an official version folder
-		trimmed := strings.TrimPrefix(name, "zapret-discord-youtube-")
-		// Simple check: if trimmed part doesn't contain "zapret", assume it is the version string
-		// PS logic: $verStr = $_.Name -replace '^zapret-discord-youtube-', ''
-		// If the original folder was "zapret-v1.8.5-BF-v3.2", then prefix "zapret-discord-youtube-" DOES NOT match, so it won't be stripped.
-		// Wait, PS script does: `Get-ChildItem -Path $targetPath -Directory -Filter "zapret-discord-youtube-*"`
-		// So PS script ONLY ignores folders that do NOT start with `zapret-discord-youtube-`.
-		// BUT the user prompt says: "типа "zapret-v1.8.5-BF-v3.2", в таком случае отображать надо все название целиком".
-		// This implies the user might manually name folders or download them differently.
-		// I will be slightly more permissive than PS logic: I'll list anything starting with "zapret-", but treat "zapret-discord-youtube-X" as official-ish.
-
 		if strings.HasPrefix(name, "zapret-discord-youtube-") {
-			// This matches the official pattern
-			v.Name = trimmed
+			v.Name = strings.TrimPrefix(name, "zapret-discord-youtube-")
 			v.IsCustom = false
 		} else {
-			// Custom name
 			v.Name = name
 			v.IsCustom = true
 		}
@@ -160,7 +129,6 @@ func GetOnlineVersions() ([]Version, error) {
 func GetAllVersions() ([]Version, error) {
 	local, err := GetLocalVersions()
 	if err != nil {
-		// Don't fail completely if local read fails, just log?
 		log.Println("Error reading local versions:", err)
 		local = []Version{}
 	}
@@ -172,8 +140,6 @@ func GetAllVersions() ([]Version, error) {
 		return local, nil
 	}
 
-	// Map generic version name (e.g. "1.9.3") to Version for deduplication
-	// Priority: Installed > Online
 	versionMap := make(map[string]Version)
 
 	for _, v := range online {
@@ -181,33 +147,16 @@ func GetAllVersions() ([]Version, error) {
 	}
 
 	for _, v := range local {
-		// If we have a local version "1.9.3" and online "1.9.3", we overwrite online with local
-		// to mark it as installed.
-		// However, we need to match carefully.
-		// Local: Name="1.9.3", IsInstalled=true
-		// Online: Name="1.9.3", IsInstalled=false
-
-		// Does the key match? Yes.
-		// But wait, what if local name is "1.9.3" and online tag is "v1.9.3"?
-		// GitHub tags usually have 'v'? No, Flowseal uses "1.9.3" etc.
-
 		v.IsInstalled = true
 		versionMap[v.Name] = v
 	}
 
-	// Convert back to slice
 	var result []Version
 	for _, v := range versionMap {
 		result = append(result, v)
 	}
 
-	// Sort
-	// Custom sort: specific logic?
-	// Just sort by Name descending for now, assuming semantic versioning roughly holds
 	sort.Slice(result, func(i, j int) bool {
-		// A rudimentary semver compare could go here, but string compare is a start.
-		// Better: put installed first? No, user wants a list.
-		// Let's use simple string descent
 		return result[i].Name > result[j].Name
 	})
 
